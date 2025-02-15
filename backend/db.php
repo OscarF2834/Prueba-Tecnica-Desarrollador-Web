@@ -6,7 +6,7 @@ la base de datos
 <?php
 $host = "localhost";
 $user = "root"; 
-$password = "";
+$password = "1234";
 $dbname = "tareas_db";
 
 /* condicional que permite mostrar cuando la conexion no se pueda dar */
