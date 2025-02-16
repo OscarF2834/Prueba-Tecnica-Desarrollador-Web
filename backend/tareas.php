@@ -1,19 +1,15 @@
 <?php
-//Incluir archivo de la base de datos
-include 'db.php';
+header("Access-Control-Allow-Origin: *");
+header("Content-Type: application/json");
+header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE");
+header("Access-Control-Allow-Headers: Content-Type");
 
-// Condicional para crear tarea
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $titulo = $_POST["titulo"];
-    $descripcion = $_POST["descripcion"];
+include 'db.php'; // Conexión a la BD
 
-    $sql = "INSERT INTO tareas (titulo, descripcion) VALUES ('$titulo', '$descripcion')";
-    echo ($conn->query($sql) ? "Tarea creada" : "Error: " . $conn->error);
-}
+$method = $_SERVER["REQUEST_METHOD"];
 
-// Condicional para obtener tareas
-if ($_SERVER["REQUEST_METHOD"] == "GET") {
-    $result = $conn->query("SELECT * FROM tareas");
+if ($method == "GET") {
+    $result = $conexion->query("SELECT * FROM tareas");
     $tareas = [];
     while ($row = $result->fetch_assoc()) {
         $tareas[] = $row;
@@ -21,23 +17,67 @@ if ($_SERVER["REQUEST_METHOD"] == "GET") {
     echo json_encode($tareas);
 }
 
-// Condicional para actualizar tarea
-if ($_SERVER["REQUEST_METHOD"] == "PUT") {
+if ($method == "POST") {
+    error_log("Solicitud POST recibida"); // Mensaje para depuración
+
+    if (!isset($_POST["titulo"]) || !isset($_POST["descripcion"])) {
+        echo json_encode(["error" => "Título y descripción requeridos"]);
+        exit;
+    }
+
+    $titulo = $conexion->real_escape_string($_POST["titulo"]);
+    $descripcion = $conexion->real_escape_string($_POST["descripcion"]);
+
+    $sql = "CALL crear_tarea('$titulo', '$descripcion')";
+    
+    if ($conexion->query($sql)) {
+        echo json_encode(["message" => "Tarea agregada correctamente"]);
+    } else {
+        echo json_encode(["error" => "Error al insertar tarea: " . $conexion->error]);
+    }
+}
+
+if ($method == "PUT") {
     parse_str(file_get_contents("php://input"), $_PUT);
-    $id = $_PUT["id"];
-    $titulo = $_PUT["titulo"];
-    $descripcion = $_PUT["descripcion"];
+    
+    if (!isset($_PUT["id"]) || !is_numeric($_PUT["id"])) {
+        echo json_encode(["error" => "ID inválido"]);
+        exit;
+    }
 
-    $sql = "UPDATE tareas SET titulo='$titulo', descripcion='$descripcion' WHERE id=$id";
-    echo ($conn->query($sql) ? "Tarea actualizada" : "Error: " . $conn->error);
+    $id = (int) $_PUT["id"];
+    if (isset($_PUT["descripcion"])) {
+        $descripcion = $conexion->real_escape_string($_PUT["descripcion"]);
+        $sql = "CALL modificar_tarea($id, '$descripcion')";
+        $conexion->query($sql);
+        echo json_encode(["message" => "Tarea actualizada"]);
+    } elseif (isset($_PUT["estado"])) {
+        $estado = in_array($_PUT["estado"], ['pendiente', 'completada']) ? $_PUT["estado"] : 'pendiente';
+        $sql = "CALL actualizar_tarea($id, '$estado')";
+        $conexion->query($sql);
+        echo json_encode(["message" => "Estado actualizado"]);
+    }
 }
 
-// Condicional para eliminar tarea
-if ($_SERVER["REQUEST_METHOD"] == "DELETE") {
-    parse_str(file_get_contents("php://input"), $_DELETE);
-    $id = $_DELETE["id"];
+if ($method == "DELETE") {
+    if (!isset($_GET["id"]) || !is_numeric($_GET["id"])) {
+        echo json_encode(["error" => "ID inválido"]);
+        exit;
+    }
 
-    $sql = "DELETE FROM tareas WHERE id=$id";
-    echo ($conn->query($sql) ? "Tarea eliminada" : "Error: " . $conn->error);
+    $id = (int) $_GET["id"];
+    $sql = "CALL eliminar_tarea($id)";
+    $conexion->query($sql);
+    echo json_encode(["message" => "Tarea eliminada"]);
 }
+
+$conexion->close();
+
+include 'db.php';
+if ($conexion->connect_error) {
+    die(json_encode(["error" => "Error de conexión a la BD: " . $conexion->connect_error]));
+} else {
+    die(json_encode(["message" => "Conexión a MySQL exitosa"]));
+}
+
 ?>
